@@ -23,6 +23,20 @@ class PaymentAccepted(BaseModel):
     created_at: datetime
 
 
+class PaymentEvent(BaseModel):
+    payment_id: UUID
+
+
+class PaymentWebhook(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    payment_id: UUID = Field(validation_alias="id")
+    status: PaymentStatus
+    amount: Decimal
+    currency: Currency
+    processed_at: datetime
+
+
 class PaymentDetail(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
