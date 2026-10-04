@@ -13,7 +13,7 @@ BATCH_SIZE = 100
 POLL_INTERVAL = 1
 
 
-async def publish_pending():
+async def publish_pending() -> None:
     async with async_session() as session, session.begin():
         events = await session.scalars(
             select(Outbox)
@@ -33,7 +33,7 @@ async def publish_pending():
             event.published_at = func.now()
 
 
-async def run_outbox():
+async def run_outbox() -> None:
     while True:
         try:
             await publish_pending()

@@ -11,7 +11,7 @@ from app.models import Outbox, Payment
 from app.schemas import PaymentAccepted, PaymentCreate, PaymentDetail
 
 
-async def verify_api_key(x_api_key: str | None = Header(default=None)):
+async def verify_api_key(x_api_key: str | None = Header(default=None)) -> None:
     if x_api_key != settings.api_key:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid API key")
 
@@ -28,7 +28,7 @@ async def create_payment(
     data: PaymentCreate,
     idempotency_key: str = Header(),
     session: AsyncSession = Depends(get_session),
-):
+) -> Payment:
     existing = await get_by_idempotency_key(session, idempotency_key)
     if existing:
         return existing
@@ -55,7 +55,7 @@ async def create_payment(
 @router.get("/{payment_id}", response_model=PaymentDetail)
 async def get_payment(
     payment_id: uuid.UUID, session: AsyncSession = Depends(get_session)
-):
+) -> Payment:
     payment = await session.get(Payment, payment_id)
     if not payment:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Payment not found")

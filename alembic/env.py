@@ -1,6 +1,7 @@
 import asyncio
 
 from alembic import context
+from sqlalchemy import Connection
 
 from app import models
 from app.db import engine
@@ -8,13 +9,13 @@ from app.db import engine
 target_metadata = models.Base.metadata
 
 
-def run_migrations(connection):
+def run_migrations(connection: Connection) -> None:
     context.configure(connection=connection, target_metadata=target_metadata)
     with context.begin_transaction():
         context.run_migrations()
 
 
-async def run_async_migrations():
+async def run_async_migrations() -> None:
     async with engine.connect() as connection:
         await connection.run_sync(run_migrations)
     await engine.dispose()

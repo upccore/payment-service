@@ -21,25 +21,25 @@ app = FastStream(broker)
 
 
 @app.after_startup
-async def setup():
+async def setup() -> None:
     await declare_topology()
 
 
-async def emulate_gateway(payment: Payment):
+async def emulate_gateway(payment: Payment) -> None:
     await asyncio.sleep(random.uniform(2, 5))
     succeeded = random.random() < 0.9
     payment.status = PaymentStatus.succeeded if succeeded else PaymentStatus.failed
     payment.processed_at = datetime.now(timezone.utc)
 
 
-async def send_webhook(payment: Payment):
+async def send_webhook(payment: Payment) -> None:
     payload = PaymentWebhook.model_validate(payment).model_dump(mode="json")
     async with httpx.AsyncClient(timeout=WEBHOOK_TIMEOUT) as client:
         response = await client.post(payment.webhook_url, json=payload)
         response.raise_for_status()
 
 
-async def process_payment(payment_id: UUID):
+async def process_payment(payment_id: UUID) -> None:
     async with async_session() as session:
         payment = await session.get_one(Payment, payment_id, with_for_update=True)
         if payment.status == PaymentStatus.pending:
@@ -54,7 +54,7 @@ async def process_payment(payment_id: UUID):
     channel=Channel(prefetch_count=PREFETCH_COUNT),
     ack_policy=AckPolicy.REJECT_ON_ERROR,
 )
-async def handle_payment(event: PaymentEvent, logger: Logger):
+async def handle_payment(event: PaymentEvent, logger: Logger) -> None:
     for attempt in range(1, MAX_ATTEMPTS + 1):
         try:
             await process_payment(event.payment_id)

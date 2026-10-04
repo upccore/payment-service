@@ -22,7 +22,7 @@ payments_queue = RabbitQueue(
 dlq_queue = RabbitQueue(DLQ_NAME, durable=True, routing_key=DLQ_NAME)
 
 
-async def declare_topology():
+async def declare_topology() -> None:
     for exchange, queue in (
         (payments_exchange, payments_queue),
         (dlx_exchange, dlq_queue),
