@@ -1,7 +1,8 @@
 from faststream.rabbit import RabbitBroker, RabbitExchange, RabbitQueue
 
-from app.config import PAYMENTS_QUEUE, settings
+from app.config import settings
 
+PAYMENTS_QUEUE = "payments.new"
 DLX_NAME = "payments.dlx"
 DLQ_NAME = "payments.dlq"
 

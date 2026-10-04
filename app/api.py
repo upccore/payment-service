@@ -5,7 +5,8 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config import PAYMENTS_QUEUE, settings
+from app.broker import PAYMENTS_QUEUE
+from app.config import settings
 from app.db import get_session
 from app.models import Outbox, Payment
 from app.schemas import PaymentAccepted, PaymentCreate, PaymentDetail
