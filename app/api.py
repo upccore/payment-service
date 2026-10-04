@@ -26,7 +26,7 @@ async def get_by_idempotency_key(session: AsyncSession, key: str) -> Payment | N
 @router.post("", status_code=status.HTTP_202_ACCEPTED, response_model=PaymentAccepted)
 async def create_payment(
     data: PaymentCreate,
-    idempotency_key: str = Header(),
+    idempotency_key: str = Header(min_length=1),
     session: AsyncSession = Depends(get_session),
 ) -> Payment:
     existing = await get_by_idempotency_key(session, idempotency_key)
