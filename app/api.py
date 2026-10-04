@@ -48,7 +48,10 @@ async def create_payment(
         await session.commit()
     except IntegrityError:
         await session.rollback()
-        return await get_by_idempotency_key(session, idempotency_key)
+        existing = await get_by_idempotency_key(session, idempotency_key)
+        if existing is None:
+            raise
+        return existing
     return payment
 
 
