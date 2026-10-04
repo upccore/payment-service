@@ -121,6 +121,8 @@ curl http://localhost:8000/api/v1/payments/72d04251-4e0c-4849-b3ea-aced3b97e54b 
 
 Доставка считается успешной при ответе `2xx`.
 
+Адрес `https://example.com/webhook` из примера на `POST` отвечает ошибкой, поэтому на нём видна работа retry и DLQ. Чтобы увидеть доставленный webhook, укажите в `webhook_url` адрес, принимающий `POST`, например с сервиса https://webhook.site.
+
 ## Как это работает
 
 ```
