@@ -5,6 +5,7 @@ Revises:
 Create Date: 2026-10-02
 
 """
+
 from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
@@ -20,7 +21,9 @@ def upgrade():
         "payments",
         sa.Column("id", sa.Uuid(), primary_key=True),
         sa.Column("amount", sa.Numeric(12, 2), nullable=False),
-        sa.Column("currency", sa.Enum("RUB", "USD", "EUR", name="currency"), nullable=False),
+        sa.Column(
+            "currency", sa.Enum("RUB", "USD", "EUR", name="currency"), nullable=False
+        ),
         sa.Column("description", sa.String(), nullable=False),
         sa.Column("metadata", postgresql.JSONB(), nullable=False),
         sa.Column(

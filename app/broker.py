@@ -23,7 +23,10 @@ dlq_queue = RabbitQueue(DLQ_NAME, durable=True, routing_key=DLQ_NAME)
 
 
 async def declare_topology():
-    for exchange, queue in ((payments_exchange, payments_queue), (dlx_exchange, dlq_queue)):
+    for exchange, queue in (
+        (payments_exchange, payments_queue),
+        (dlx_exchange, dlq_queue),
+    ):
         declared_exchange = await broker.declare_exchange(exchange)
         declared_queue = await broker.declare_queue(queue)
         await declared_queue.bind(declared_exchange, routing_key=queue.routing_key)
