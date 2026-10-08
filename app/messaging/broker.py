@@ -1,14 +1,11 @@
 from faststream.rabbit import RabbitBroker, RabbitExchange, RabbitQueue
 
-from app.config import settings
-
-PAYMENTS_QUEUE = "payments.new"
-DLX_NAME = "payments.dlx"
-DLQ_NAME = "payments.dlq"
+from app.core.config import settings
+from app.messaging.queues import DLQ_NAME, DLX_NAME, PAYMENTS_EXCHANGE, PAYMENTS_QUEUE
 
 broker = RabbitBroker(settings.rabbitmq_url)
 
-payments_exchange = RabbitExchange("payments", durable=True)
+payments_exchange = RabbitExchange(PAYMENTS_EXCHANGE, durable=True)
 dlx_exchange = RabbitExchange(DLX_NAME, durable=True)
 
 payments_queue = RabbitQueue(

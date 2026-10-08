@@ -46,7 +46,7 @@ services:
 
   consumer:
     build: .
-    command: faststream run app.consumer:app
+    command: faststream run app.messaging.consumer:app
     environment: *app-environment
     restart: on-failure
     depends_on:

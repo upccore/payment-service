@@ -3,8 +3,8 @@ import asyncio
 from alembic import context
 from sqlalchemy import Connection
 
-from app import models
-from app.db import engine
+from app.db import models
+from app.db.session import engine
 
 target_metadata = models.Base.metadata
 

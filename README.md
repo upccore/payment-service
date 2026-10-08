@@ -178,16 +178,24 @@ docker compose exec rabbitmq rabbitmqctl list_queues name messages
 
 ```
 app/
-  api.py        эндпоинты и проверка API-ключа
-  broker.py     брокер, обменники и очереди RabbitMQ
-  config.py     настройки из переменных окружения
-  consumer.py   обработчик платежей
-  db.py         подключение к базе данных
-  main.py       приложение FastAPI
-  models.py     модели Payment и Outbox
-  outbox.py     публикация событий из outbox
-  schemas.py    схемы Pydantic
-alembic/        миграции
+  core/           настройки из переменных окружения
+  domain/         статусы, валюты, данные нового платежа, доменные исключения
+  db/             модели, сессия, Unit of Work
+  repositories/   доступ к таблицам payments и outbox
+  services/
+    payments.py   создание и получение платежа, идемпотентность
+    processing.py обработка платежа в consumer
+    gateway.py    эмуляция платёжного шлюза
+    webhooks.py   отправка webhook
+  api/            эндпоинты, проверка API-ключа, схемы, обработка ошибок
+  messaging/
+    broker.py     брокер, обменники и очереди RabbitMQ
+    consumer.py   обработчик сообщений с retry
+    outbox_relay.py публикация событий из outbox
+  main.py         приложение FastAPI
+alembic/          миграции
 Dockerfile
 docker-compose.yml
 ```
+
+Зависимости направлены внутрь: `api` и `messaging` вызывают сервисы, сервисы работают с базой через Unit of Work и репозитории, `domain` ни от чего не зависит. Поэтому сервисы можно тестировать без HTTP и брокера.

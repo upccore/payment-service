@@ -4,7 +4,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, HttpUrl
 
-from app.models import Currency, PaymentStatus
+from app.domain.payments import Currency, PaymentStatus
 
 
 class PaymentCreate(BaseModel):
@@ -21,20 +21,6 @@ class PaymentAccepted(BaseModel):
     payment_id: UUID = Field(validation_alias="id")
     status: PaymentStatus
     created_at: datetime
-
-
-class PaymentEvent(BaseModel):
-    payment_id: UUID
-
-
-class PaymentWebhook(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
-    payment_id: UUID = Field(validation_alias="id")
-    status: PaymentStatus
-    amount: Decimal
-    currency: Currency
-    processed_at: datetime
 
 
 class PaymentDetail(BaseModel):
