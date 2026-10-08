@@ -16,6 +16,9 @@ POLL_INTERVAL = 1
 class OutboxRelay:
     """Публикует события из outbox в RabbitMQ.
 
+    Можно запускать несколько экземпляров: SKIP LOCKED не даст двум
+    публикаторам взять одно событие.
+
     Отметка о публикации фиксируется после отправки, поэтому при сбое
     между ними событие уйдёт повторно. Consumer к этому готов.
     """
@@ -32,7 +35,8 @@ class OutboxRelay:
 
     async def publish_pending(self) -> None:
         async with self._uow_factory() as uow:
-            for event in await uow.outbox.lock_unpublished(BATCH_SIZE):
+            events = await uow.outbox.lock_unpublished(BATCH_SIZE)
+            for event in events:
                 await self._broker.publish(
                     event.payload,
                     exchange=self._exchange,
@@ -42,6 +46,8 @@ class OutboxRelay:
                 )
                 uow.outbox.mark_published(event)
             await uow.commit()
+        if events:
+            logger.info("Published %s outbox events", len(events))
 
     async def run(self) -> None:
         while True:

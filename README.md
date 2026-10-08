@@ -15,7 +15,16 @@
 docker compose up --build
 ```
 
-Поднимаются четыре сервиса: `postgres`, `rabbitmq`, `api`, `consumer`. Миграции применяются автоматически при старте `api`.
+Поднимаются пять сервисов:
+
+| Сервис | Что делает |
+|---|---|
+| `postgres`, `rabbitmq` | база данных и брокер |
+| `api` | HTTP API; при старте применяет миграции |
+| `outbox-relay` | публикует события из таблицы `outbox` в RabbitMQ |
+| `consumer` | обрабатывает платежи и отправляет webhook |
+
+`outbox-relay` и `consumer` стартуют, когда `api` проходит healthcheck, то есть миграции уже применены.
 
 | Что | Адрес |
 |---|---|
@@ -46,6 +55,7 @@ cp .env.example .env
 | `DB_MAX_OVERFLOW` | `5` | сколько соединений можно открыть сверх пула |
 | `CONSUMER_PREFETCH` | `10` | сколько сообщений consumer обрабатывает одновременно; не больше `DB_POOL_SIZE` |
 | `GATEWAY_TIMEOUT` | `30` | таймаут вызова платёжного шлюза, секунды |
+| `LOG_LEVEL` | `INFO` | уровень логирования |
 
 Остановка с удалением данных:
 
@@ -55,7 +65,11 @@ docker compose down -v
 
 ## API
 
-Все запросы требуют заголовок `X-API-Key`. Без него или с неверным ключом сервис отвечает `401`.
+Все запросы к `/api/v1/payments` требуют заголовок `X-API-Key`. Без него или с неверным ключом сервис отвечает `401`.
+
+### Health check
+
+`GET /health` — без API-ключа. Проверяет соединение с базой: `200 {"status": "ok"}` или `503`, если база недоступна. Его использует healthcheck в docker compose.
 
 ### Создание платежа
 
@@ -146,7 +160,7 @@ curl http://localhost:8000/api/v1/payments/72d04251-4e0c-4849-b3ea-aced3b97e54b 
 ```
 POST /payments ──> payments + outbox (одна транзакция)
                         │
-                 outbox publisher
+                  outbox-relay
                         │
               exchange "payments" ──> queue "payments.new" ──> consumer ──> webhook
                     ▲                                             │
@@ -161,7 +175,7 @@ consumer ── ошибка, попытка 3 ──> exchange "payments.dlx" �
 ```
 
 1. `api` в одной транзакции сохраняет платёж со статусом `pending` и событие в таблицу `outbox`.
-2. Фоновая задача в `api` раз в секунду читает неотправленные события, публикует их в очередь `payments.new` и отмечает время публикации.
+2. `outbox-relay` раз в секунду читает неотправленные события, публикует их в очередь `payments.new` и отмечает время публикации.
 3. `consumer` получает сообщение, эмулирует обработку в шлюзе (2–5 секунд, 90% успех, 10% ошибка), сохраняет статус `succeeded` или `failed` и отправляет webhook.
 
 ### Outbox
@@ -218,9 +232,26 @@ Webhook отправляется уже после фиксации транза
 docker compose exec rabbitmq rabbitmqctl list_queues name messages
 ```
 
+### Логи
+
+Все сервисы пишут логи в одном формате. Пока consumer обрабатывает платёж, в каждой строке есть его идентификатор, включая строки SQLAlchemy и httpx:
+
+```
+2026-10-08 08:56:55,927 INFO app.services.processing [payment=d34bed51-...] Payment processed with status failed
+2026-10-08 08:56:55,937 INFO app.services.webhooks [payment=d34bed51-...] Webhook delivered to http://hook/ok
+```
+
+Посмотреть путь одного платежа через все сервисы:
+
+```bash
+docker compose logs | grep d34bed51
+```
+
+Запросы healthcheck в access-лог не попадают.
+
 ## Принятые решения
 
-- Публикация событий из outbox выполняется фоновой задачей внутри сервиса `api`, отдельного сервиса для неё нет.
+- Публикация из outbox вынесена в отдельный сервис `outbox-relay`: `api` работает только с базой и не зависит от доступности RabbitMQ. Relay можно масштабировать: события выбираются с `FOR UPDATE SKIP LOCKED`, и два экземпляра не возьмут одно событие.
 - Повторный запрос с тем же `Idempotency-Key` и теми же параметрами возвращает существующий платёж с кодом `202`, как и первый запрос: клиенту не нужно различать эти случаи.
 - 3 попытки относятся к обработке сообщения целиком, а не только к отправке webhook.
 - Задержка между попытками реализована retry-очередями RabbitMQ с TTL, а не плагином `rabbitmq_delayed_message_exchange`: решение работает на стандартном образе RabbitMQ.
@@ -259,7 +290,7 @@ mypy app tests alembic/env.py
 
 ```
 app/
-  core/           настройки из переменных окружения
+  core/           настройки из переменных окружения, логирование
   domain/         статусы, валюты, данные нового платежа, доменные исключения
   db/             модели, сессия, Unit of Work
   repositories/   доступ к таблицам payments и outbox
@@ -269,13 +300,14 @@ app/
     gateway.py    эмуляция платёжного шлюза
     protocols.py  интерфейсы шлюза и отправки webhook
     webhooks.py   отправка webhook
-  api/            эндпоинты, проверка API-ключа, схемы, обработка ошибок
+  api/            эндпоинты платежей и /health, проверка API-ключа, схемы, обработка ошибок
   messaging/
     queues.py     имена обменников и очередей, параметры retry
     broker.py     брокер и объявление топологии RabbitMQ
     consumer.py   подписчик на payments.new
     retry.py      обработка события: retry или DLQ
     outbox_relay.py публикация событий из outbox
+    outbox_worker.py точка входа сервиса outbox-relay
     protocols.py  интерфейсы публикатора и обработчика
   main.py         приложение FastAPI
 alembic/          миграции

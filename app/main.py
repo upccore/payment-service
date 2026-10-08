@@ -1,29 +1,24 @@
-import asyncio
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from functools import partial
 
 from fastapi import FastAPI
 
 from app.api.errors import register_error_handlers
+from app.api.routes.health import router as health_router
 from app.api.routes.payments import router as payments_router
-from app.db.session import session_factory
-from app.db.unit_of_work import UnitOfWork
-from app.messaging.broker import broker, declare_topology, payments_exchange
-from app.messaging.outbox_relay import OutboxRelay
+from app.core.config import settings
+from app.core.logging import setup_logging
+from app.db.session import engine
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    await broker.connect()
-    await declare_topology(broker)
-    relay = OutboxRelay(partial(UnitOfWork, session_factory), broker, payments_exchange)
-    relay_task = asyncio.create_task(relay.run())
+    setup_logging(settings.log_level)
     yield
-    relay_task.cancel()
-    await broker.stop()
+    await engine.dispose()
 
 
 app = FastAPI(title="Payment Service", lifespan=lifespan)
 app.include_router(payments_router)
+app.include_router(health_router)
 register_error_handlers(app)

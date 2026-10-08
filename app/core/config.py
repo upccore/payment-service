@@ -12,6 +12,7 @@ class Settings(BaseSettings):
     db_max_overflow: int = 5
     consumer_prefetch: int = 10
     gateway_timeout: float = 30
+    log_level: str = "INFO"
 
     @model_validator(mode="after")
     def check_pool_fits_prefetch(self) -> Self:

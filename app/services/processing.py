@@ -1,4 +1,5 @@
 import asyncio
+import logging
 from collections.abc import Callable
 from datetime import UTC, datetime
 from uuid import UUID
@@ -7,6 +8,8 @@ from app.db.unit_of_work import UnitOfWork
 from app.domain.exceptions import PaymentNotFoundError
 from app.domain.payments import PaymentStatus
 from app.services.protocols import Gateway, WebhookNotifier
+
+logger = logging.getLogger(__name__)
 
 
 class PaymentProcessor:
@@ -41,4 +44,7 @@ class PaymentProcessor:
                     payment.status = await self._gateway.charge(payment)
                 payment.processed_at = datetime.now(UTC)
                 await uow.commit()
+                logger.info("Payment processed with status %s", payment.status)
+            else:
+                logger.info("Payment already %s, sending webhook only", payment.status)
         await self._webhooks.send(payment)

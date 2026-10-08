@@ -1,3 +1,4 @@
+import logging
 from datetime import datetime
 from decimal import Decimal
 from uuid import UUID
@@ -7,6 +8,8 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from app.db.models import Payment
 from app.domain.payments import Currency, PaymentStatus
+
+logger = logging.getLogger(__name__)
 
 
 class PaymentWebhook(BaseModel):
@@ -28,3 +31,4 @@ class WebhookSender:
         payload = PaymentWebhook.model_validate(payment).model_dump(mode="json")
         response = await self._client.post(payment.webhook_url, json=payload)
         response.raise_for_status()
+        logger.info("Webhook delivered to %s", payment.webhook_url)

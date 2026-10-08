@@ -1,3 +1,4 @@
+import logging
 import uuid
 from collections.abc import Callable
 
@@ -6,6 +7,8 @@ from app.db.unit_of_work import UnitOfWork
 from app.domain.exceptions import IdempotencyConflictError, PaymentNotFoundError
 from app.domain.payments import NewPayment, PaymentStatus
 from app.messaging.queues import PAYMENTS_QUEUE
+
+logger = logging.getLogger(__name__)
 
 
 class PaymentService:
@@ -43,6 +46,7 @@ class PaymentService:
 
             uow.outbox.add(PAYMENTS_QUEUE, {"payment_id": str(payment.id)})
             await uow.commit()
+            logger.info("Payment %s created", payment.id)
             return payment
 
     @staticmethod
@@ -55,6 +59,7 @@ class PaymentService:
             or existing.webhook_url != data.webhook_url
         ):
             raise IdempotencyConflictError(data.idempotency_key)
+        logger.info("Payment %s returned for a repeated request", existing.id)
         return existing
 
     async def get(self, payment_id: uuid.UUID) -> Payment:

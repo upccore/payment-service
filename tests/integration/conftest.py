@@ -9,7 +9,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from testcontainers.community.postgres import PostgresContainer
 
-from app.api.deps import get_payment_service
+from app.api.deps import get_session_factory
 from app.core.config import settings
 from app.db.unit_of_work import UnitOfWork
 from app.main import app
@@ -64,8 +64,10 @@ def payment_service(uow_factory: partial[UnitOfWork]) -> PaymentService:
 
 
 @pytest.fixture
-async def client(payment_service: PaymentService) -> AsyncIterator[AsyncClient]:
-    app.dependency_overrides[get_payment_service] = lambda: payment_service
+async def client(
+    session_factory: async_sessionmaker[AsyncSession],
+) -> AsyncIterator[AsyncClient]:
+    app.dependency_overrides[get_session_factory] = lambda: session_factory
     transport = ASGITransport(app=app)
     async with AsyncClient(
         transport=transport,

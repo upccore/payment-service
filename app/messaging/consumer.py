@@ -1,4 +1,3 @@
-import logging
 from functools import partial
 
 import httpx
@@ -6,7 +5,8 @@ from faststream import AckPolicy, Context, FastStream
 from faststream.rabbit import Channel, RabbitMessage
 
 from app.core.config import settings
-from app.db.session import session_factory
+from app.core.logging import setup_logging
+from app.db.session import engine, session_factory
 from app.db.unit_of_work import UnitOfWork
 from app.messaging.broker import (
     broker,
@@ -29,9 +29,7 @@ app = FastStream(broker)
 
 @app.on_startup
 async def create_handler() -> None:
-    logging.basicConfig(
-        level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s"
-    )
+    setup_logging(settings.log_level)
     http_client = httpx.AsyncClient(timeout=WEBHOOK_TIMEOUT)
     processor = PaymentProcessor(
         uow_factory=partial(UnitOfWork, session_factory),
@@ -51,8 +49,9 @@ async def setup() -> None:
 
 
 @app.after_shutdown
-async def close_http_client(http_client: httpx.AsyncClient = Context()) -> None:
+async def close_resources(http_client: httpx.AsyncClient = Context()) -> None:
     await http_client.aclose()
+    await engine.dispose()
 
 
 @broker.subscriber(

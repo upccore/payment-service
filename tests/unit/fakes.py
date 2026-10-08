@@ -89,3 +89,11 @@ class FakeWebhookSender:
         self.sent.append(payment)
         if self.error:
             raise self.error
+
+
+class FakePublisher:
+    def __init__(self) -> None:
+        self.published: list[dict[str, Any]] = []
+
+    async def publish(self, message: Any, **kwargs: Any) -> None:
+        self.published.append({"message": message, **kwargs})

@@ -1,5 +1,4 @@
 import uuid
-from typing import Any
 from uuid import UUID
 
 import pytest
@@ -8,6 +7,7 @@ from faststream.rabbit import RabbitExchange
 from app.messaging.queues import ATTEMPT_HEADER, MAX_ATTEMPTS
 from app.messaging.retry import PaymentEventHandler
 from app.messaging.schemas import PaymentEvent
+from tests.unit.fakes import FakePublisher
 
 RETRY_EXCHANGE = RabbitExchange("payments.retry")
 
@@ -21,14 +21,6 @@ class FlakyProcessor:
         self.calls.append(payment_id)
         if self.fails:
             raise RuntimeError("processing failed")
-
-
-class FakePublisher:
-    def __init__(self) -> None:
-        self.published: list[dict[str, Any]] = []
-
-    async def publish(self, message: Any, **kwargs: Any) -> None:
-        self.published.append({"message": message, **kwargs})
 
 
 def make_handler(fails: bool) -> tuple[PaymentEventHandler, FakePublisher]:

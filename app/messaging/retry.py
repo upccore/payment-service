@@ -2,6 +2,7 @@ import logging
 
 from faststream.rabbit import RabbitExchange
 
+from app.core.logging import payment_id_var
 from app.messaging.protocols import MessagePublisher, Processor
 from app.messaging.queues import (
     ATTEMPT_HEADER,
@@ -33,21 +34,26 @@ class PaymentEventHandler:
         self._retry_exchange = retry_exchange
 
     async def handle(self, event: PaymentEvent, message_id: str, attempt: int) -> None:
+        token = payment_id_var.set(str(event.payment_id))
+        try:
+            await self._handle(event, message_id, attempt)
+        finally:
+            payment_id_var.reset(token)
+
+    async def _handle(self, event: PaymentEvent, message_id: str, attempt: int) -> None:
         try:
             await self._processor.process(event.payment_id)
         except Exception as error:
             if attempt >= MAX_ATTEMPTS:
                 logger.error(
-                    "Payment %s: attempt %s/%s failed, moving to DLQ: %s",
-                    event.payment_id,
+                    "Attempt %s/%s failed, moving to DLQ: %s",
                     attempt,
                     MAX_ATTEMPTS,
                     error,
                 )
                 raise
             logger.warning(
-                "Payment %s: attempt %s/%s failed, retry in %s ms: %s",
-                event.payment_id,
+                "Attempt %s/%s failed, retry in %s ms: %s",
                 attempt,
                 MAX_ATTEMPTS,
                 retry_delay_ms(attempt),

@@ -41,7 +41,26 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - import urllib.request; urllib.request.urlopen("http://localhost:8000/health")
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  outbox-relay:
+    build: .
+    command: faststream run app.messaging.outbox_worker:app
+    environment: *app-environment
+    restart: on-failure
+    depends_on:
       rabbitmq:
+        condition: service_healthy
+      api:
         condition: service_healthy
 
   consumer:
@@ -50,12 +69,10 @@ services:
     environment: *app-environment
     restart: on-failure
     depends_on:
-      postgres:
-        condition: service_healthy
       rabbitmq:
         condition: service_healthy
       api:
-        condition: service_started
+        condition: service_healthy
 
 volumes:
   postgres_data:
