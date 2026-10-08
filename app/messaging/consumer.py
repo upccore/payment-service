@@ -22,15 +22,13 @@ from app.services.gateway import PaymentGateway
 from app.services.processing import PaymentProcessor
 from app.services.webhooks import WebhookSender
 
-WEBHOOK_TIMEOUT = 10
-
 app = FastStream(broker)
 
 
 @app.on_startup
 async def create_handler() -> None:
     setup_logging(settings.log_level)
-    http_client = httpx.AsyncClient(timeout=WEBHOOK_TIMEOUT)
+    http_client = httpx.AsyncClient(timeout=settings.webhook_timeout)
     processor = PaymentProcessor(
         uow_factory=partial(UnitOfWork, session_factory),
         gateway=PaymentGateway(),
