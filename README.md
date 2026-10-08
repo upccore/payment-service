@@ -29,6 +29,12 @@ API-ключ по умолчанию — `secret-api-key`. Свой ключ з�
 API_KEY=my-key docker compose up --build
 ```
 
+или через файл `.env`, который docker compose читает автоматически:
+
+```bash
+cp .env.example .env
+```
+
 Остановка с удалением данных:
 
 ```bash
@@ -189,6 +195,16 @@ pytest
 pytest -m "not integration"
 ```
 
+Линтеры и проверка типов:
+
+```bash
+ruff check .
+ruff format --check .
+mypy app tests alembic/env.py
+```
+
+Те же команды есть в `Makefile`: `make test`, `make test-unit`, `make lint`, `make format`. В GitHub Actions на каждый push в `main` и на pull request запускаются линтеры, mypy и все тесты.
+
 - `tests/unit` — сервисы на фейковых репозиториях, отправка webhook через `httpx.MockTransport`, retry в consumer через `TestRabbitBroker`;
 - `tests/integration` — API, outbox relay и обработка платежа на реальной базе, включая параллельные запросы с одним `Idempotency-Key` и параллельную обработку одного платежа.
 
@@ -204,6 +220,7 @@ app/
     payments.py   создание и получение платежа, идемпотентность
     processing.py обработка платежа в consumer
     gateway.py    эмуляция платёжного шлюза
+    protocols.py  интерфейсы шлюза и отправки webhook
     webhooks.py   отправка webhook
   api/            эндпоинты, проверка API-ключа, схемы, обработка ошибок
   messaging/
