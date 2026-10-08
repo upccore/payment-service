@@ -1,3 +1,4 @@
+import secrets
 from functools import partial
 
 from fastapi import Depends, Header, HTTPException, status
@@ -10,7 +11,9 @@ from app.services.payments import PaymentService
 
 
 async def verify_api_key(x_api_key: str | None = Header(default=None)) -> None:
-    if x_api_key != settings.api_key:
+    """Сравнивает ключ за постоянное время: подобрать его по задержке нельзя."""
+    expected = settings.api_key.encode()
+    if x_api_key is None or not secrets.compare_digest(x_api_key.encode(), expected):
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid API key")
 
 

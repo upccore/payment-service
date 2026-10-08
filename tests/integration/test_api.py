@@ -133,6 +133,14 @@ async def test_invalid_api_key_returns_401(
     assert post_response.status_code == 401
 
 
+async def test_non_ascii_api_key_returns_401(client: AsyncClient) -> None:
+    response = await client.get(
+        f"{URL}/{uuid.uuid4()}", headers={"X-API-Key": "ключ".encode()}
+    )
+
+    assert response.status_code == 401
+
+
 async def test_missing_api_key_returns_401(client: AsyncClient) -> None:
     del client.headers["X-API-Key"]
 
