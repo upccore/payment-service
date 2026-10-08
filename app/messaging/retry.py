@@ -3,6 +3,7 @@ import logging
 from faststream.rabbit import RabbitExchange
 
 from app.core.logging import payment_id_var
+from app.domain.exceptions import PermanentError
 from app.messaging.protocols import MessagePublisher, Processor
 from app.messaging.queues import (
     ATTEMPT_HEADER,
@@ -19,8 +20,9 @@ class PaymentEventHandler:
     """Обрабатывает событие платежа и решает, что делать при ошибке.
 
     После неудачной попытки событие уходит в retry-очередь с нужной задержкой,
-    а исходное сообщение подтверждается. После последней попытки исключение
-    пробрасывается, брокер отклоняет сообщение, и оно попадает в DLQ.
+    а исходное сообщение подтверждается. После последней попытки или при
+    PermanentError исключение пробрасывается, брокер отклоняет сообщение,
+    и оно попадает в DLQ.
     """
 
     def __init__(
@@ -43,6 +45,9 @@ class PaymentEventHandler:
     async def _handle(self, event: PaymentEvent, message_id: str, attempt: int) -> None:
         try:
             await self._processor.process(event.payment_id)
+        except PermanentError as error:
+            logger.error("Permanent error, moving to DLQ without retry: %s", error)
+            raise
         except Exception as error:
             if attempt >= MAX_ATTEMPTS:
                 logger.error(
