@@ -174,6 +174,24 @@ docker compose exec rabbitmq rabbitmqctl list_queues name messages
 - 3 попытки относятся к обработке сообщения целиком, а не только к отправке webhook.
 - Consumer обрабатывает не более 10 сообщений одновременно.
 
+## Тесты
+
+Нужны Python 3.12 и запущенный Docker: интеграционные тесты поднимают PostgreSQL через testcontainers и применяют к нему миграции.
+
+```bash
+pip install -r requirements-dev.txt
+pytest
+```
+
+Только unit-тесты, без Docker:
+
+```bash
+pytest -m "not integration"
+```
+
+- `tests/unit` — сервисы на фейковых репозиториях, отправка webhook через `httpx.MockTransport`, retry в consumer через `TestRabbitBroker`;
+- `tests/integration` — API, outbox relay и обработка платежа на реальной базе, включая параллельные запросы с одним `Idempotency-Key` и параллельную обработку одного платежа.
+
 ## Структура проекта
 
 ```
@@ -194,6 +212,9 @@ app/
     outbox_relay.py публикация событий из outbox
   main.py         приложение FastAPI
 alembic/          миграции
+tests/
+  unit/           тесты без внешних зависимостей
+  integration/    тесты на PostgreSQL в testcontainers
 Dockerfile
 docker-compose.yml
 ```

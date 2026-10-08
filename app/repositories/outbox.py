@@ -15,7 +15,7 @@ class OutboxRepository:
         self._session.add(Outbox(queue=queue, payload=payload))
 
     async def lock_unpublished(self, limit: int) -> Sequence[Outbox]:
-        """Блокирует неопубликованные события, пропуская занятые другими публикаторами."""
+        """Блокирует неопубликованные события, пропуская уже занятые."""
         result = await self._session.scalars(
             select(Outbox)
             .where(Outbox.published_at.is_(None))
