@@ -8,8 +8,8 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.db.models import Outbox
 from app.db.unit_of_work import UnitOfWork
-from app.messaging.queues import PAYMENTS_QUEUE
 from app.messaging.outbox_relay import OutboxRelay
+from app.messaging.queues import PAYMENTS_QUEUE
 from app.services.payments import PaymentService
 from tests.factories import make_new_payment
 

@@ -4,9 +4,7 @@ from fastapi.responses import JSONResponse
 from app.domain.exceptions import PaymentNotFoundError
 
 
-async def payment_not_found_handler(
-    request: Request, exc: PaymentNotFoundError
-) -> JSONResponse:
+async def payment_not_found_handler(request: Request, exc: Exception) -> JSONResponse:
     return JSONResponse(
         status_code=status.HTTP_404_NOT_FOUND, content={"detail": str(exc)}
     )

@@ -1,8 +1,9 @@
 import asyncio
 import logging
 from collections.abc import Callable
+from typing import Any, Protocol
 
-from faststream.rabbit import RabbitBroker, RabbitExchange
+from faststream.rabbit import RabbitExchange
 
 from app.db.unit_of_work import UnitOfWork
 
@@ -10,6 +11,18 @@ logger = logging.getLogger(__name__)
 
 BATCH_SIZE = 100
 POLL_INTERVAL = 1
+
+
+class MessagePublisher(Protocol):
+    async def publish(
+        self,
+        message: Any,
+        *,
+        exchange: RabbitExchange,
+        routing_key: str,
+        persist: bool,
+        message_id: str,
+    ) -> Any: ...
 
 
 class OutboxRelay:
@@ -22,7 +35,7 @@ class OutboxRelay:
     def __init__(
         self,
         uow_factory: Callable[[], UnitOfWork],
-        broker: RabbitBroker,
+        broker: MessagePublisher,
         exchange: RabbitExchange,
     ) -> None:
         self._uow_factory = uow_factory

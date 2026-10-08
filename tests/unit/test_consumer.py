@@ -3,7 +3,7 @@ from collections.abc import AsyncIterator
 from uuid import UUID
 
 import pytest
-from faststream.rabbit import TestRabbitBroker
+from faststream.rabbit import RabbitBroker, TestRabbitBroker
 
 from app.messaging import consumer
 from app.messaging.broker import broker, payments_exchange, payments_queue
@@ -26,12 +26,12 @@ def no_retry_delay(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 @pytest.fixture
-async def test_broker() -> AsyncIterator[TestRabbitBroker]:
+async def test_broker() -> AsyncIterator[RabbitBroker]:
     async with TestRabbitBroker(broker) as test_broker:
         yield test_broker
 
 
-async def publish(test_broker: TestRabbitBroker, processor: FlakyProcessor) -> UUID:
+async def publish(test_broker: RabbitBroker, processor: FlakyProcessor) -> UUID:
     consumer.app.context.set_global("processor", processor)
     payment_id = uuid.uuid4()
     await test_broker.publish(
@@ -43,7 +43,7 @@ async def publish(test_broker: TestRabbitBroker, processor: FlakyProcessor) -> U
 
 
 async def test_message_is_processed_once_on_success(
-    test_broker: TestRabbitBroker,
+    test_broker: RabbitBroker,
 ) -> None:
     processor = FlakyProcessor(failures=0)
 
@@ -53,7 +53,7 @@ async def test_message_is_processed_once_on_success(
 
 
 async def test_processing_is_retried_until_success(
-    test_broker: TestRabbitBroker,
+    test_broker: RabbitBroker,
 ) -> None:
     processor = FlakyProcessor(failures=2)
 
@@ -63,7 +63,7 @@ async def test_processing_is_retried_until_success(
 
 
 async def test_message_is_rejected_after_max_attempts(
-    test_broker: TestRabbitBroker,
+    test_broker: RabbitBroker,
 ) -> None:
     processor = FlakyProcessor(failures=consumer.MAX_ATTEMPTS)
 

@@ -5,9 +5,9 @@ from sqlalchemy import Connection
 from sqlalchemy.ext.asyncio import create_async_engine
 
 from app.core.config import settings
-from app.db import models
+from app.db import Base
 
-target_metadata = models.Base.metadata
+target_metadata = Base.metadata
 
 
 def run_migrations(connection: Connection) -> None:

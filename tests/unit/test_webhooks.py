@@ -1,5 +1,5 @@
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import httpx
 import pytest
@@ -18,7 +18,7 @@ async def test_send_posts_payment_result() -> None:
 
     payment = make_payment(
         status=PaymentStatus.succeeded,
-        processed_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
+        processed_at=datetime(2026, 1, 1, tzinfo=UTC),
     )
     async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
         await WebhookSender(client).send(payment)
@@ -39,7 +39,7 @@ async def test_send_raises_on_error_response() -> None:
     transport = httpx.MockTransport(lambda request: httpx.Response(500))
     payment = make_payment(
         status=PaymentStatus.failed,
-        processed_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
+        processed_at=datetime(2026, 1, 1, tzinfo=UTC),
     )
 
     async with httpx.AsyncClient(transport=transport) as client:

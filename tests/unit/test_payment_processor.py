@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 
@@ -35,7 +35,7 @@ async def test_pending_payment_is_charged_saved_and_notified(
 
 async def test_processed_payment_is_not_charged_again() -> None:
     uow, gateway, webhooks = FakeUnitOfWork(), FakeGateway(), FakeWebhookSender()
-    processed_at = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    processed_at = datetime(2026, 1, 1, tzinfo=UTC)
     payment = make_payment(status=PaymentStatus.succeeded, processed_at=processed_at)
     uow.payments.items[payment.id] = payment
 

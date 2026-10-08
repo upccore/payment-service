@@ -4,13 +4,13 @@ from decimal import Decimal
 from typing import Any
 
 
-class Currency(str, enum.Enum):
+class Currency(enum.StrEnum):
     RUB = "RUB"
     USD = "USD"
     EUR = "EUR"
 
 
-class PaymentStatus(str, enum.Enum):
+class PaymentStatus(enum.StrEnum):
     pending = "pending"
     succeeded = "succeeded"
     failed = "failed"

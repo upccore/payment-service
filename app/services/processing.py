@@ -1,12 +1,11 @@
 from collections.abc import Callable
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from uuid import UUID
 
 from app.db.unit_of_work import UnitOfWork
 from app.domain.exceptions import PaymentNotFoundError
 from app.domain.payments import PaymentStatus
-from app.services.gateway import PaymentGateway
-from app.services.webhooks import WebhookSender
+from app.services.protocols import Gateway, WebhookNotifier
 
 
 class PaymentProcessor:
@@ -19,8 +18,8 @@ class PaymentProcessor:
     def __init__(
         self,
         uow_factory: Callable[[], UnitOfWork],
-        gateway: PaymentGateway,
-        webhooks: WebhookSender,
+        gateway: Gateway,
+        webhooks: WebhookNotifier,
     ) -> None:
         self._uow_factory = uow_factory
         self._gateway = gateway
@@ -33,6 +32,6 @@ class PaymentProcessor:
                 raise PaymentNotFoundError(payment_id)
             if payment.status == PaymentStatus.pending:
                 payment.status = await self._gateway.charge(payment)
-                payment.processed_at = datetime.now(timezone.utc)
+                payment.processed_at = datetime.now(UTC)
                 await uow.commit()
         await self._webhooks.send(payment)

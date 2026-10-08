@@ -18,9 +18,10 @@ class PaymentRepository:
         return await self._session.get(Payment, payment_id, with_for_update=True)
 
     async def get_by_idempotency_key(self, key: str) -> Payment | None:
-        return await self._session.scalar(
+        result = await self._session.scalars(
             select(Payment).where(Payment.idempotency_key == key)
         )
+        return result.one_or_none()
 
     async def add_if_absent(self, payment: Payment) -> bool:
         """Добавляет платёж, если его idempotency key ещё не занят.
