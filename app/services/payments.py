@@ -4,7 +4,7 @@ from collections.abc import Callable
 from app.db.models import Payment
 from app.db.unit_of_work import UnitOfWork
 from app.domain.exceptions import PaymentNotFoundError
-from app.domain.payments import NewPayment
+from app.domain.payments import NewPayment, PaymentStatus
 from app.messaging.queues import PAYMENTS_QUEUE
 
 
@@ -30,6 +30,7 @@ class PaymentService:
                 payment_metadata=data.metadata,
                 idempotency_key=data.idempotency_key,
                 webhook_url=data.webhook_url,
+                status=PaymentStatus.pending,
             )
             if not await uow.payments.add_if_absent(payment):
                 existing = await uow.payments.get_by_idempotency_key(
