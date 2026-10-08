@@ -3,7 +3,7 @@ from collections.abc import Callable
 
 from app.db.models import Payment
 from app.db.unit_of_work import UnitOfWork
-from app.domain.exceptions import PaymentNotFoundError
+from app.domain.exceptions import IdempotencyConflictError, PaymentNotFoundError
 from app.domain.payments import NewPayment, PaymentStatus
 from app.messaging.queues import PAYMENTS_QUEUE
 
@@ -15,12 +15,13 @@ class PaymentService:
     async def create(self, data: NewPayment) -> Payment:
         """Создаёт платёж и событие для очереди в одной транзакции.
 
-        Если платёж с таким idempotency key уже есть, возвращает его.
+        Если платёж с таким idempotency key уже есть, возвращает его,
+        а если ключ использован с другими параметрами — IdempotencyConflictError.
         """
         async with self._uow_factory() as uow:
             existing = await uow.payments.get_by_idempotency_key(data.idempotency_key)
             if existing:
-                return existing
+                return self._replay(existing, data)
 
             payment = Payment(
                 id=uuid.uuid4(),
@@ -38,11 +39,23 @@ class PaymentService:
                 )
                 if existing is None:
                     raise RuntimeError("Payment insert failed without a duplicate")
-                return existing
+                return self._replay(existing, data)
 
             uow.outbox.add(PAYMENTS_QUEUE, {"payment_id": str(payment.id)})
             await uow.commit()
             return payment
+
+    @staticmethod
+    def _replay(existing: Payment, data: NewPayment) -> Payment:
+        if (
+            existing.amount != data.amount
+            or existing.currency != data.currency
+            or existing.description != data.description
+            or existing.payment_metadata != data.metadata
+            or existing.webhook_url != data.webhook_url
+        ):
+            raise IdempotencyConflictError(data.idempotency_key)
+        return existing
 
     async def get(self, payment_id: uuid.UUID) -> Payment:
         async with self._uow_factory() as uow:

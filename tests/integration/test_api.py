@@ -80,6 +80,29 @@ async def test_same_idempotency_key_returns_same_payment(
     assert await count(session_factory, Outbox) == 1
 
 
+async def test_equivalent_body_with_same_key_returns_same_payment(
+    client: AsyncClient,
+) -> None:
+    first = await create(client, "order-1", metadata={"a": 1, "b": 2})
+    second = await create(client, "order-1", amount="100.5", metadata={"b": 2, "a": 1})
+
+    assert second.status_code == 202
+    assert second.json()["payment_id"] == first.json()["payment_id"]
+
+
+async def test_different_body_with_same_key_returns_409(
+    client: AsyncClient, session_factory: async_sessionmaker[AsyncSession]
+) -> None:
+    await create(client, "order-1")
+
+    response = await create(client, "order-1", amount="200.00")
+
+    assert response.status_code == 409
+    assert "order-1" in response.json()["detail"]
+    assert await count(session_factory, Payment) == 1
+    assert await count(session_factory, Outbox) == 1
+
+
 async def test_concurrent_requests_with_same_key_create_one_payment(
     client: AsyncClient, session_factory: async_sessionmaker[AsyncSession]
 ) -> None:
