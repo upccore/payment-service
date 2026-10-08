@@ -5,6 +5,7 @@ import httpx
 from faststream import AckPolicy, Context, FastStream
 from faststream.rabbit import Channel, RabbitMessage
 
+from app.core.config import settings
 from app.db.session import session_factory
 from app.db.unit_of_work import UnitOfWork
 from app.messaging.broker import (
@@ -21,7 +22,6 @@ from app.services.gateway import PaymentGateway
 from app.services.processing import PaymentProcessor
 from app.services.webhooks import WebhookSender
 
-PREFETCH_COUNT = 10
 WEBHOOK_TIMEOUT = 10
 
 app = FastStream(broker)
@@ -37,6 +37,7 @@ async def create_handler() -> None:
         uow_factory=partial(UnitOfWork, session_factory),
         gateway=PaymentGateway(),
         webhooks=WebhookSender(http_client),
+        gateway_timeout=settings.gateway_timeout,
     )
     app.context.set_global("http_client", http_client)
     app.context.set_global(
@@ -57,7 +58,7 @@ async def close_http_client(http_client: httpx.AsyncClient = Context()) -> None:
 @broker.subscriber(
     payments_queue,
     payments_exchange,
-    channel=Channel(prefetch_count=PREFETCH_COUNT),
+    channel=Channel(prefetch_count=settings.consumer_prefetch),
     ack_policy=AckPolicy.REJECT_ON_ERROR,
 )
 async def handle_payment(

@@ -13,7 +13,7 @@ from tests.unit.fakes import FakeGateway, FakeUnitOfWork, FakeWebhookSender
 def make_processor(
     uow: FakeUnitOfWork, gateway: FakeGateway, webhooks: FakeWebhookSender
 ) -> PaymentProcessor:
-    return PaymentProcessor(uow, gateway, webhooks)
+    return PaymentProcessor(uow, gateway, webhooks, gateway_timeout=1)
 
 
 @pytest.mark.parametrize("result", [PaymentStatus.succeeded, PaymentStatus.failed])
@@ -67,4 +67,19 @@ async def test_missing_payment_raises() -> None:
         await make_processor(uow, gateway, webhooks).process(uuid.uuid4())
 
     assert gateway.calls == 0
+    assert webhooks.sent == []
+
+
+async def test_gateway_timeout_aborts_processing() -> None:
+    uow, webhooks = FakeUnitOfWork(), FakeWebhookSender()
+    gateway = FakeGateway(delay=10)
+    payment = make_payment()
+    uow.payments.items[payment.id] = payment
+    processor = PaymentProcessor(uow, gateway, webhooks, gateway_timeout=0.05)
+
+    with pytest.raises(TimeoutError):
+        await processor.process(payment.id)
+
+    assert payment.status == PaymentStatus.pending
+    assert uow.commits == 0
     assert webhooks.sent == []

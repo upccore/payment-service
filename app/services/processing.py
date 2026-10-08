@@ -1,3 +1,4 @@
+import asyncio
 from collections.abc import Callable
 from datetime import UTC, datetime
 from uuid import UUID
@@ -11,8 +12,11 @@ from app.services.protocols import Gateway, WebhookNotifier
 class PaymentProcessor:
     """Проводит платёж через шлюз и уведомляет клиента.
 
-    Если результат уже сохранён, шлюз повторно не вызывается:
-    при повторной обработке отправляется только webhook.
+    Строка платежа блокируется на время вызова шлюза, поэтому параллельная
+    обработка одного платежа не приведёт к двойному списанию. Если результат
+    уже сохранён, шлюз повторно не вызывается: отправляется только webhook.
+    Вызов шлюза ограничен gateway_timeout, чтобы зависший шлюз не держал
+    блокировку и соединение с базой.
     """
 
     def __init__(
@@ -20,10 +24,12 @@ class PaymentProcessor:
         uow_factory: Callable[[], UnitOfWork],
         gateway: Gateway,
         webhooks: WebhookNotifier,
+        gateway_timeout: float,
     ) -> None:
         self._uow_factory = uow_factory
         self._gateway = gateway
         self._webhooks = webhooks
+        self._gateway_timeout = gateway_timeout
 
     async def process(self, payment_id: UUID) -> None:
         async with self._uow_factory() as uow:
@@ -31,7 +37,8 @@ class PaymentProcessor:
             if payment is None:
                 raise PaymentNotFoundError(payment_id)
             if payment.status == PaymentStatus.pending:
-                payment.status = await self._gateway.charge(payment)
+                async with asyncio.timeout(self._gateway_timeout):
+                    payment.status = await self._gateway.charge(payment)
                 payment.processed_at = datetime.now(UTC)
                 await uow.commit()
         await self._webhooks.send(payment)

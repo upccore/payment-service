@@ -1,3 +1,4 @@
+import asyncio
 from types import TracebackType
 from typing import Any, Self
 from uuid import UUID
@@ -66,12 +67,16 @@ class FakeUnitOfWork:
 
 
 class FakeGateway:
-    def __init__(self, status: PaymentStatus = PaymentStatus.succeeded) -> None:
+    def __init__(
+        self, status: PaymentStatus = PaymentStatus.succeeded, delay: float = 0
+    ) -> None:
         self.status = status
+        self.delay = delay
         self.calls = 0
 
     async def charge(self, payment: Payment) -> PaymentStatus:
         self.calls += 1
+        await asyncio.sleep(self.delay)
         return self.status
 
 
