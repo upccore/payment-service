@@ -137,10 +137,15 @@ POST /payments ──> payments + outbox (одна транзакция)
                  outbox publisher
                         │
               exchange "payments" ──> queue "payments.new" ──> consumer ──> webhook
-                                              │
-                                   после 3 неудачных попыток
-                                              │
-                          exchange "payments.dlx" ──> queue "payments.dlq"
+                    ▲                                             │
+                    │                                  ошибка, попытка 1 или 2
+                    │                                             │
+                    │                                 exchange "payments.retry"
+                    │                                             │
+                    └── по истечении TTL ── queue "payments.retry.1000ms" (TTL 1 с)
+                                            queue "payments.retry.2000ms" (TTL 2 с)
+
+consumer ── ошибка, попытка 3 ──> exchange "payments.dlx" ──> queue "payments.dlq"
 ```
 
 1. `api` в одной транзакции сохраняет платёж со статусом `pending` и событие в таблицу `outbox`.
@@ -168,7 +173,16 @@ POST /payments ──> payments + outbox (одна транзакция)
 
 Обработка сообщения выполняется до 3 раз с экспоненциальной задержкой между попытками: 1 и 2 секунды. Ошибкой считается любой сбой обработки, включая недоставленный webhook.
 
-После третьей неудачи сообщение отклоняется и через обменник `payments.dlx` попадает в очередь `payments.dlq`.
+Задержку выдерживает RabbitMQ, а не consumer:
+
+1. Номер попытки хранится в заголовке `x-attempt`; у первой доставки его нет, это попытка 1.
+2. Если попытка 1 или 2 не удалась, consumer публикует событие в обменник `payments.retry` с `x-attempt`, увеличенным на 1, и подтверждает исходное сообщение.
+3. Событие попадает в очередь своей задержки: `payments.retry.1000ms` или `payments.retry.2000ms`. У этих очередей нет потребителей, а у сообщений в них ограничен срок жизни (`x-message-ttl`). Когда он истекает, RabbitMQ через dead-letter возвращает сообщение в `payments.new`.
+4. После третьей неудачи сообщение отклоняется и через обменник `payments.dlx` попадает в очередь `payments.dlq`.
+
+Так consumer не держит сообщение и слот prefetch, пока ждёт повтора, а ожидающие повторы переживают его перезапуск. Для каждой задержки своя очередь: в одной очереди с разным TTL у сообщений короткая задержка могла бы ждать, пока истечёт длинная, потому что RabbitMQ удаляет просроченные сообщения только из головы очереди.
+
+Если consumer упадёт между публикацией в retry и подтверждением исходного сообщения, событие будет обработано дважды. Это безопасно по той же причине, что и для outbox.
 
 При повторной попытке шлюз заново не вызывается, если статус платежа уже сохранён, — повторяется только отправка webhook.
 
@@ -185,11 +199,12 @@ docker compose exec rabbitmq rabbitmqctl list_queues name messages
 - Публикация событий из outbox выполняется фоновой задачей внутри сервиса `api`, отдельного сервиса для неё нет.
 - Повторный запрос с тем же `Idempotency-Key` и теми же параметрами возвращает существующий платёж с кодом `202`, как и первый запрос: клиенту не нужно различать эти случаи.
 - 3 попытки относятся к обработке сообщения целиком, а не только к отправке webhook.
+- Задержка между попытками реализована retry-очередями RabbitMQ с TTL, а не плагином `rabbitmq_delayed_message_exchange`: решение работает на стандартном образе RabbitMQ.
 - Consumer обрабатывает не более 10 сообщений одновременно.
 
 ## Тесты
 
-Нужны Python 3.12 и запущенный Docker: интеграционные тесты поднимают PostgreSQL через testcontainers и применяют к нему миграции.
+Нужны Python 3.12 и запущенный Docker: интеграционные тесты поднимают PostgreSQL и RabbitMQ через testcontainers и применяют к базе миграции.
 
 ```bash
 pip install -r requirements-dev.txt
@@ -212,8 +227,8 @@ mypy app tests alembic/env.py
 
 Те же команды есть в `Makefile`: `make test`, `make test-unit`, `make lint`, `make format`. В GitHub Actions на каждый push в `main` и на pull request запускаются линтеры, mypy и все тесты.
 
-- `tests/unit` — сервисы на фейковых репозиториях, отправка webhook через `httpx.MockTransport`, retry в consumer через `TestRabbitBroker`;
-- `tests/integration` — API, outbox relay и обработка платежа на реальной базе, включая параллельные запросы с одним `Idempotency-Key` и параллельную обработку одного платежа.
+- `tests/unit` — сервисы на фейковых репозиториях, отправка webhook через `httpx.MockTransport`, решение «retry или DLQ» в `PaymentEventHandler`, чтение номера попытки подписчиком через `TestRabbitBroker`;
+- `tests/integration` — API, outbox relay и обработка платежа на реальной базе, включая параллельные запросы с одним `Idempotency-Key` и параллельную обработку одного платежа; retry-очереди и DLQ на реальном RabbitMQ.
 
 ## Структура проекта
 
@@ -231,14 +246,17 @@ app/
     webhooks.py   отправка webhook
   api/            эндпоинты, проверка API-ключа, схемы, обработка ошибок
   messaging/
-    broker.py     брокер, обменники и очереди RabbitMQ
-    consumer.py   обработчик сообщений с retry
+    queues.py     имена обменников и очередей, параметры retry
+    broker.py     брокер и объявление топологии RabbitMQ
+    consumer.py   подписчик на payments.new
+    retry.py      обработка события: retry или DLQ
     outbox_relay.py публикация событий из outbox
+    protocols.py  интерфейсы публикатора и обработчика
   main.py         приложение FastAPI
 alembic/          миграции
 tests/
   unit/           тесты без внешних зависимостей
-  integration/    тесты на PostgreSQL в testcontainers
+  integration/    тесты на PostgreSQL и RabbitMQ в testcontainers
 Dockerfile
 docker-compose.yml
 ```

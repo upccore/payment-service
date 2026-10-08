@@ -1,28 +1,22 @@
 import uuid
 from collections.abc import AsyncIterator
-from uuid import UUID
+from typing import Any
 
 import pytest
 from faststream.rabbit import RabbitBroker, TestRabbitBroker
 
 from app.messaging import consumer
 from app.messaging.broker import broker, payments_exchange, payments_queue
+from app.messaging.queues import ATTEMPT_HEADER
+from app.messaging.schemas import PaymentEvent
 
 
-class FlakyProcessor:
-    def __init__(self, failures: int) -> None:
-        self.failures = failures
-        self.calls: list[UUID] = []
+class RecordingHandler:
+    def __init__(self) -> None:
+        self.calls: list[tuple[PaymentEvent, str, int]] = []
 
-    async def process(self, payment_id: UUID) -> None:
-        self.calls.append(payment_id)
-        if len(self.calls) <= self.failures:
-            raise RuntimeError("processing failed")
-
-
-@pytest.fixture(autouse=True)
-def no_retry_delay(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(consumer, "RETRY_BASE_DELAY", 0)
+    async def handle(self, event: PaymentEvent, message_id: str, attempt: int) -> None:
+        self.calls.append((event, message_id, attempt))
 
 
 @pytest.fixture
@@ -31,43 +25,36 @@ async def test_broker() -> AsyncIterator[RabbitBroker]:
         yield test_broker
 
 
-async def publish(test_broker: RabbitBroker, processor: FlakyProcessor) -> UUID:
-    consumer.app.context.set_global("processor", processor)
+@pytest.fixture
+def handler() -> RecordingHandler:
+    handler = RecordingHandler()
+    consumer.app.context.set_global("payment_handler", handler)
+    return handler
+
+
+async def publish(test_broker: RabbitBroker, **kwargs: Any) -> uuid.UUID:
     payment_id = uuid.uuid4()
     await test_broker.publish(
         {"payment_id": str(payment_id)},
         exchange=payments_exchange,
         routing_key=payments_queue.routing_key,
+        message_id="message-1",
+        **kwargs,
     )
     return payment_id
 
 
-async def test_message_is_processed_once_on_success(
-    test_broker: RabbitBroker,
+async def test_first_delivery_is_attempt_one(
+    test_broker: RabbitBroker, handler: RecordingHandler
 ) -> None:
-    processor = FlakyProcessor(failures=0)
+    payment_id = await publish(test_broker)
 
-    payment_id = await publish(test_broker, processor)
-
-    assert processor.calls == [payment_id]
+    assert handler.calls == [(PaymentEvent(payment_id=payment_id), "message-1", 1)]
 
 
-async def test_processing_is_retried_until_success(
-    test_broker: RabbitBroker,
+async def test_attempt_is_read_from_header(
+    test_broker: RabbitBroker, handler: RecordingHandler
 ) -> None:
-    processor = FlakyProcessor(failures=2)
+    await publish(test_broker, headers={ATTEMPT_HEADER: 3})
 
-    payment_id = await publish(test_broker, processor)
-
-    assert processor.calls == [payment_id] * 3
-
-
-async def test_message_is_rejected_after_max_attempts(
-    test_broker: RabbitBroker,
-) -> None:
-    processor = FlakyProcessor(failures=consumer.MAX_ATTEMPTS)
-
-    with pytest.raises(RuntimeError, match="processing failed"):
-        await publish(test_broker, processor)
-
-    assert len(processor.calls) == consumer.MAX_ATTEMPTS
+    assert [attempt for _, _, attempt in handler.calls] == [3]

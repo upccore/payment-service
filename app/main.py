@@ -16,7 +16,7 @@ from app.messaging.outbox_relay import OutboxRelay
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     await broker.connect()
-    await declare_topology()
+    await declare_topology(broker)
     relay = OutboxRelay(partial(UnitOfWork, session_factory), broker, payments_exchange)
     relay_task = asyncio.create_task(relay.run())
     yield
